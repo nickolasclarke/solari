@@ -1,6 +1,13 @@
 //const cflights = require('./index')
 //const flight = new cflights
 const moment = require('moment')
+const _ = require('lodash')
+const QPXApi = require('qpx-api')
+
+const qpx = new QPXApi({
+  api_key: '',
+  timeout: 5000 // timeout in milleseconds
+})
 
 //date used for the head of the window. It finds the next Thursday
 const startDate = (date) => {
@@ -13,8 +20,8 @@ const startDate = (date) => {
   }
 }
 
-//build the sliding window of weekend dates based off a date, how many weeks wanted, and which search engine to format for.
-function buildWindow(date, weeks, engine) {
+//build the sliding Range of weekend dates based off a date, how many weeks wanted, and which search engine to format for.
+function buildRWindow(date, weeks, engine) {
   let comingWeekends = {}
   let currentEngine = engine || 'qpx'
   for (let i = 1; i <= weeks; i++) {
@@ -76,80 +83,38 @@ function dates(searchDate, engine) {
   }
 }
 
-  function buildSlices(window) {
-    let slice = []
-    for (weeks in window) {
-      let test = window[weeks]
-      for (prop in test) {
-        if (prop === 'ThuDepartureDate' || 'FriDepartureDate') {
-          let template = {
-            "kind": "qpxexpress#sliceInput",
-            "origin": "",
-            "destination": "",
-            "date": "",
-            "permittedDepartureTime": {
-              "kind": "qpxexpress#timeOfDayRange",
-              "earliestTime": "",
-              "latestTime": ""
-            },
-          }
-          template.origin = 'SHA'
-          template.destination = 'XNN'
-          template.date = test[prop]
-          slice.push(template)
+  function buildSlices(rWindow) {
+    _.forOwn(rWindow, (weekObj, week) => {
+      _.forOwn(weekObj, (date, day) => {
+        rWindow[week][day] = new template
+        rWindow[week][day].date = date
+        if (day.match(/(...)(Departure)\w+/)) {
+          rWindow[week][day].origin = 'SHA'
+          rWindow[week][day].destination = 'XNN'
+        } else {
+          rWindow[week][day].origin = 'XNN'
+          rWindow[week][day].destination = 'SHA'
         }
-      }
-      return slice
+      })
+    })
+    return rWindow
+  }
+
+  function template() {
+    this.kind = "qpxexpress#sliceInput"
+    this.origin = ""
+    this.destination = ""
+    this.date = ""
+    this.permittedDepartureTime = {
+      "kind": "qpxexpress#timeOfDayRange",
+      "earliestTime": "",
+      "latestTime": ""
     }
   }
+testing = buildSlices(buildRWindow(startDate(),1))
 
   //using ctrip
   //flight.oneWay({DCity:'SHA',ACity:'PEK',DDate:'2017-03-17'}).then(results => console.log(results))
 
 
   // using QPX
-  
-/* function buildSlices(window, options) {
-    let slice = []
-    for (weeks in window) {
-      let test = {
-        "kind": "qpxexpress#sliceInput",
-        "origin": "",
-        "destination": "",
-        "date": "",
-        "permittedDepartureTime": {
-          "kind": "qpxexpress#timeOfDayRange",
-          "earliestTime": "",
-          "latestTime": ""
-        },
-      }
-      let testing = window[weeks]
-      return testing
-    }
-  }*/
-
- function buildSlices(window, options) {
-    let slice = []
-    for (weeks in window) {
-      let test = {
-        "kind": "qpxexpress#sliceInput",
-        "origin": "",
-        "destination": "",
-        "date": "",
-        "permittedDepartureTime": {
-          "kind": "qpxexpress#timeOfDayRange",
-          "earliestTime": "",
-          "latestTime": ""
-        },
-      }
-      let testing = window[weeks]
-      if (window[weeks].departureDate) {
-        test.origin = 'SHA'
-        test.destination = 'XNN'
-        test.date = weeks.departureDate
-      }
-      slice.push(test)
-      return slice
-    }
-  }
-
