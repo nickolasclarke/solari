@@ -1,5 +1,5 @@
-//const cflights = require('./index')
-//const flight = new cflights
+const cflights = require('../cflights/index.js')
+const cfClient = new cflights
 const moment = require('moment')
 const _ = require('lodash')
 const QPXApi = require('qpx-api')
@@ -35,19 +35,14 @@ function buildRWindow(date, weeks, engine) {
 
 //build an array of dates, depending on the search engine
 function dates(searchDate, engine) {
-  const PAIRS = [
-    { from: 4, to: 8 }, //thursday to monday
-    { from: 4, to: 7 }, //thursday to sunday
-    { from: 5, to: 8 }, //friday to monday
-    { from: 5, to: 7 }, //friday to sunday
-  ]
+  const CDATES = [4,5,7,8]
   const SLICES = [
     { from: 4 },
     { from: 5 },
     {   to: 7 },
     {   to: 8 },
   ]
-  const FORMAT = 'YYYY-MM-DD ddd'
+  const FORMAT = 'YYYY-MM-DD'
 //get dates for qpx
   function gDates(date) {
     let datesObj = {}
@@ -68,10 +63,9 @@ function dates(searchDate, engine) {
   }
 //get dates for ctrip
   function ctripDates(date) {
-    return PAIRS.map((p) => {
+    return CDATES.map((p) => {
       return {
-        departureDate: moment(searchDate).day(p.from).format(FORMAT),
-        returnDate: moment(searchDate).day(p.to).format(FORMAT),
+        [moment(searchDate).day(p).format('ddd')]: moment(searchDate).day(p).format(FORMAT),
       }
     })
   }
@@ -111,10 +105,56 @@ function dates(searchDate, engine) {
       "latestTime": ""
     }
   }
-testing = buildSlices(buildRWindow(startDate(),1))
+gtesting = buildSlices(buildRWindow(startDate(),1))
+ctesting = buildRWindow(startDate(),1,'ctrip')
 
   //using ctrip
+  function findcFlights(dayDates, homeCity, destCity){
+    let flightList = []
+    _.forOwn(dayDates, (weekObj, week) => {
+      weekObj.map((dates) => {
+        _.forOwn(dates, (date, day) => {
+          let flight = {
+            DCity:'',
+            ACity:'',
+            DDate:'',
+          }
+          if (day.match(/(Thu)|(Fri)/)){
+            flight.DCity = homeCity
+            flight.ACity = destCity
+            flight.DDate = date
+            flightList.push(flight)
+          } else {
+            flight.DCity = destCity
+            flight.ACity = homeCity
+            flight.DDate = date
+            flightList.push(flight)
+          }
+        })
+      })
+    })
+    //loop over flightList and drop the queries into a queue
+
+    //return cfClient.oneWay(flight).then(results => results)
+  }
+
   //flight.oneWay({DCity:'SHA',ACity:'PEK',DDate:'2017-03-17'}).then(results => console.log(results))
 
 
   // using QPX
+  function findgFlights(slices) {
+    let data = {
+      passengers: { adultCount: 1 },
+      slice: [],
+      solutions: 10
+    }
+    _.forOwn(slices, (weekObj, week) => {
+      _.forOwn(weekObj, (slice, day) => {
+        data.slice.push(slice)
+      })
+    })
+    return new Promise((resolve, reject) => {
+      resolve(data)
+    });  
+  //return qpx.search(data).then(results => console.log(results))
+}
