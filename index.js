@@ -3,11 +3,13 @@ const cfClient = new cflights
 const moment = require('moment')
 const _ = require('lodash')
 const QPXApi = require('qpx-api')
+const PQueue = require('p-queue')
 
 const qpx = new QPXApi({
   api_key: '',
   timeout: 5000 // timeout in milleseconds
 })
+const q = new PQueue({concurrency: 1});
 
 //date used for the head of the window. It finds the next Thursday
 const startDate = (date) => {
@@ -111,6 +113,7 @@ ctesting = buildRWindow(startDate(),1,'ctrip')
   //using ctrip
   function findcFlights(dayDates, homeCity, destCity){
     let flightList = []
+    //loop through dates provided and build cflights-style queries
     _.forOwn(dayDates, (weekObj, week) => {
       weekObj.map((dates) => {
         _.forOwn(dates, (date, day) => {
@@ -133,14 +136,22 @@ ctesting = buildRWindow(startDate(),1,'ctrip')
         })
       })
     })
+
     //loop over flightList and drop the queries into a queue
-
-    //return cfClient.oneWay(flight).then(results => results)
+    //currently pToken is not being set correctly, need to simplfy and build back up.
+    for (flight of flightList) {
+      for (let i = 1; i<=3; i++){
+        let newFlight = flight
+        newFlight.pToken = i
+        q.add(() => cfClient.oneWay(newFlight).then(results => {
+          console.log(newFlight)
+          fs.appendFileSync('./test.json', JSON.stringify(results))
+        })
+        )
+      }
+    }
   }
-
-  //flight.oneWay({DCity:'SHA',ACity:'PEK',DDate:'2017-03-17'}).then(results => console.log(results))
-
-
+  //flight.oneWay({DCity:'SHA',ACity:'PEK',DDate:'2017-03-17'}).then(results => console.log(results)
   // using QPX
   function findgFlights(slices) {
     let data = {
