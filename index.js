@@ -136,15 +136,12 @@ ctesting = buildRWindow(startDate(),1,'ctrip')
         })
       })
     })
-
-    //loop over flightList and drop the queries into a queue
-    //currently pToken is not being set correctly, need to simplfy and build back up.
     for (flight of flightList) {
       for (let i = 1; i<=3; i++){
-        let newFlight = flight
+        let newFlight = Object.assign({},flight)
         newFlight.pToken = i
+        console.log(newFlight)
         q.add(() => cfClient.oneWay(newFlight).then(results => {
-          console.log(newFlight)
           fs.appendFileSync('./test.json', JSON.stringify(results))
         })
         )
