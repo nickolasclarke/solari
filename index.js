@@ -4,12 +4,13 @@ const moment = require('moment')
 const _ = require('lodash')
 const QPXApi = require('qpx-api')
 const PQueue = require('p-queue')
+const fs = require('fs')
 
 const qpx = new QPXApi({
   api_key: '',
   timeout: 5000 // timeout in milleseconds
 })
-const q = new PQueue({concurrency: 1});
+const q = new PQueue({concurrency: 3});
 
 //date used for the head of the window. It finds the next Thursday
 const startDate = (date) => {
@@ -72,7 +73,7 @@ function dates(searchDate, engine) {
     })
   }
   if (engine === 'ctrip') return ctripDates(searchDate)
-  else if (engine === 'qpx')return gDates(searchDate)
+  else if (engine === 'qpx') return gDates(searchDate)
   else {
     console.log('unknown engine, using qpx')
     return gDates(searchDate)
@@ -113,6 +114,7 @@ ctesting = buildRWindow(startDate(),1,'ctrip')
   //using ctrip
   function findcFlights(dayDates, homeCity, destCity){
     let flightList = []
+    let flightResults = {}
     //loop through dates provided and build cflights-style queries
     _.forOwn(dayDates, (weekObj, week) => {
       weekObj.map((dates) => {
@@ -136,20 +138,66 @@ ctesting = buildRWindow(startDate(),1,'ctrip')
         })
       })
     })
+    //domestic destinations only need to be called once. refactor later. 
     for (flight of flightList) {
       for (let i = 1; i<=3; i++){
         let newFlight = Object.assign({},flight)
         newFlight.pToken = i
-        console.log(newFlight)
+
         q.add(() => cfClient.oneWay(newFlight).then(results => {
-          fs.appendFileSync('./test.json', JSON.stringify(results))
+          flightResults[newFlight.DCity + newFlight.ACity + newFlight.DDate + 'p' + newFlight.pToken] = results
+
+          if (Object.keys(flightResults).length === (flightList.length * 3)){
+            console.log('done', newFlight)
+            return q.onEmpty().then(() => fs.appendFileSync('./test.json', JSON.stringify(flightResults)))
+          } else {
+            return console.log('done', newFlight)
+          }
         })
         )
       }
     }
   }
-  //flight.oneWay({DCity:'SHA',ACity:'PEK',DDate:'2017-03-17'}).then(results => console.log(results)
-  // using QPX
+
+//add promise to findcFlights, return the flightResults instead of writing to file,  and then use the code to prep the data to be written. 
+const testJson = require('../test.json')
+let parsedFlights = []
+//flatten flights into a single array
+const sortCFlightsFromGroups = (groups) => {
+  for (let group in groups) {
+   // we are only interested in the Flights Array 
+   let rawFlights = groups[group].FlightIntlAjaxResults
+   //loop through each flight and extract relevant info.
+   for ( let flight in rawFlights) {
+     //drop the uneeded nested objects and some properties 
+     let rawFlight = _.omitBy(rawFlights[flight], _.isObject)
+     rawFlight = _.omit(rawFlight, ['guid', 'isCheap', 'hasBOGO', 'isShortest', 'isShowPic', 'transitVisa'])
+     //their api seems to sort the prices $ - $$$, so we take the first one. 
+     rawFlight.lowestPrice = rawFlights[flight].flightIntlPolicys[0].ViewTotalPrice
+     parsedFlights.push(rawFlight)
+   }
+  }
+}
+
+sortCFlightsFromGroups(testJson)
+
+const findCheapestFlight = (origin, flights) => {
+  let sortedFlights = []
+  for (let flight of flights) {
+    if (flight.departureCity === origin) {
+      sortedFlights.push(flight)
+    }
+  }
+  sortedFlights.sort((flight1, flight2) => {
+    return flight1.lowestPrice - flight2.lowestPrice
+  })
+
+  return sortedFlights
+}
+
+let cheapDeparture = findCheapestFlight('SHA', parsedFlights)
+
+  // using QPX, which doesnt actually do what I want. Not sure I can, given the restraints of their API.
   function findgFlights(slices) {
     let data = {
       passengers: { adultCount: 1 },
@@ -166,3 +214,7 @@ ctesting = buildRWindow(startDate(),1,'ctrip')
     });  
   //return qpx.search(data).then(results => console.log(results))
 }
+
+const gtesting = buildSlices(buildRWindow(startDate(),1))
+const ctesting = buildRWindow(startDate(),1,'ctrip')
+
