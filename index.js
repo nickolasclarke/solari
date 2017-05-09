@@ -113,73 +113,78 @@ ctesting = buildRWindow(startDate(),1,'ctrip')
 
   //using ctrip
   function findcFlights(dayDates, homeCity, destCity){
-    let flightList = []
-    let flightResults = {}
-    //loop through dates provided and build cflights-style queries
-    _.forOwn(dayDates, (weekObj, week) => {
-      weekObj.map((dates) => {
-        _.forOwn(dates, (date, day) => {
-          let flight = {
-            DCity:'',
-            ACity:'',
-            DDate:'',
-          }
-          if (day.match(/(Thu)|(Fri)/)){
-            flight.DCity = homeCity
-            flight.ACity = destCity
-            flight.DDate = date
-            flightList.push(flight)
-          } else {
-            flight.DCity = destCity
-            flight.ACity = homeCity
-            flight.DDate = date
-            flightList.push(flight)
-          }
+    return new Promise((resolve, reject) => {
+      let flightList = []
+      let flightResults = {}
+      //loop through dates provided and build cflights-style queries
+      _.forOwn(dayDates, (weekObj, week) => {
+        weekObj.map((dates) => {
+          _.forOwn(dates, (date, day) => {
+            let flight = {
+              DCity:'',
+              ACity:'',
+              DDate:'',
+            }
+            if (day.match(/(Thu)|(Fri)/)){
+              flight.DCity = homeCity
+              flight.ACity = destCity
+              flight.DDate = date
+              flightList.push(flight)
+            } else {
+              flight.DCity = destCity
+              flight.ACity = homeCity
+              flight.DDate = date
+              flightList.push(flight)
+            }
+          })
         })
       })
-    })
-    //domestic destinations only need to be called once. refactor later. 
-    for (flight of flightList) {
-      for (let i = 1; i<=3; i++){
-        let newFlight = Object.assign({},flight)
-        newFlight.pToken = i
+      //domestic destinations only need to be called once. refactor later. 
+      for (flight of flightList) {
+        for (let i = 1; i<=3; i++){
+          let newFlight = Object.assign({},flight)
+          newFlight.pToken = i
 
-        q.add(() => cfClient.oneWay(newFlight).then(results => {
-          flightResults[newFlight.DCity + newFlight.ACity + newFlight.DDate + 'p' + newFlight.pToken] = results
-
-          if (Object.keys(flightResults).length === (flightList.length * 3)){
-            console.log('done', newFlight)
-            return q.onEmpty().then(() => fs.appendFileSync('./test.json', JSON.stringify(flightResults)))
-          } else {
-            return console.log('done', newFlight)
-          }
-        })
-        )
+          q.add(() => cfClient.oneWay(newFlight).then( results => {
+            flightResults[newFlight.DCity + newFlight.ACity + newFlight.DDate + 'p' + newFlight.pToken] = results
+            if (Object.keys(flightResults).length === (flightList.length * 3)){
+              console.log('done', newFlight)
+              return resolve(q.onEmpty().then( () => flightResults))
+            } else {
+              return console.log(' hi done', newFlight)
+            }
+          })
+          )
+        }
       }
-    }
+    })
   }
 
 //add promise to findcFlights, return the flightResults instead of writing to file,  and then use the code to prep the data to be written. 
 const testJson = require('../test.json')
-let parsedFlights = []
+
 //flatten flights into a single array
 const sortCFlightsFromGroups = (groups) => {
-  for (let group in groups) {
-   // we are only interested in the Flights Array 
-   let rawFlights = groups[group].FlightIntlAjaxResults
-   //loop through each flight and extract relevant info.
-   for ( let flight in rawFlights) {
-     //drop the uneeded nested objects and some properties 
-     let rawFlight = _.omitBy(rawFlights[flight], _.isObject)
-     rawFlight = _.omit(rawFlight, ['guid', 'isCheap', 'hasBOGO', 'isShortest', 'isShowPic', 'transitVisa'])
-     //their api seems to sort the prices $ - $$$, so we take the first one. 
-     rawFlight.lowestPrice = rawFlights[flight].flightIntlPolicys[0].ViewTotalPrice
-     parsedFlights.push(rawFlight)
-   }
-  }
+  return new Promise((resolve, reject) => {
+    let parsedFlights = []
+    for (let group in groups) {
+    // we are only interested in the Flights Array 
+    let rawFlights = groups[group].FlightIntlAjaxResults
+    //loop through each flight and extract relevant info.
+    for ( let flight in rawFlights) {
+      //drop the uneeded nested objects and some properties 
+      let rawFlight = _.omitBy(rawFlights[flight], _.isObject)
+      rawFlight = _.omit(rawFlight, ['guid', 'isCheap', 'hasBOGO', 'isShortest', 'isShowPic', 'transitVisa'])
+      //their api seems to sort the prices $ - $$$, so we take the first one. 
+      rawFlight.lowestPrice = rawFlights[flight].flightIntlPolicys[0].ViewTotalPrice
+      parsedFlights.push(rawFlight)
+      }
+    }
+    resolve(parsedFlights)
+  })
 }
 
-sortCFlightsFromGroups(testJson)
+//sortCFlightsFromGroups(testJson)
 
 const findCheapestFlight = (origin, flights) => {
   let sortedFlights = []
