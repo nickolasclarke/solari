@@ -161,46 +161,104 @@ ctesting = buildRWindow(startDate(),1,'ctrip')
   }
 
 //add promise to findcFlights, return the flightResults instead of writing to file,  and then use the code to prep the data to be written. 
-const testJson = require('../test.json')
 
-//flatten flights into a single array
+//flatten groups into 
+//currently all part2 groups have 0 flights. Unclear why. May be a bug in cflights.
 const sortCFlightsFromGroups = (groups) => {
   return new Promise((resolve, reject) => {
-    let parsedFlights = []
+    let mergedDays = {}
     for (let group in groups) {
-    // we are only interested in the Flights Array 
-    let rawFlights = groups[group].FlightIntlAjaxResults
-    //loop through each flight and extract relevant info.
-    for ( let flight in rawFlights) {
-      //drop the uneeded nested objects and some properties 
-      let rawFlight = _.omitBy(rawFlights[flight], _.isObject)
-      rawFlight = _.omit(rawFlight, ['guid', 'isCheap', 'hasBOGO', 'isShortest', 'isShowPic', 'transitVisa'])
-      //their api seems to sort the prices $ - $$$, so we take the first one. 
-      rawFlight.lowestPrice = rawFlights[flight].flightIntlPolicys[0].ViewTotalPrice
-      parsedFlights.push(rawFlight)
+      // we are only interested in the Flights Array 
+      let rawFlights = groups[group].FlightIntlAjaxResults
+      let dayName = group.substr(0, 16)
+      if (!mergedDays[dayName]) {
+        mergedDays[dayName] = []
+      }
+      //loop through each flight and extract relevant info. 
+      for (let flight in rawFlights) {
+        //drop the uneeded nested objects and some properties
+        let flightPresent
+        let rawFlight = _.omitBy(rawFlights[flight], _.isObject)
+        rawFlight = _.omit(rawFlight, ['guid', 'isCheap', 'hasBOGO', 'isShortest', 'isShowPic', 'transitVisa'])
+        //their api seems to sort the prices $ - $$$, so we take the first one. 
+        rawFlight.lowestPrice = rawFlights[flight].flightIntlPolicys[0].ViewTotalPrice
+        //check if the flight has already been processed from a previous group
+
+        for (let dayFlight in mergedDays[dayName]) {
+          try {
+            assert.deepEqual(mergedDays[dayName][dayFlight], rawFlight)
+            flightPresent = true
+            break
+          } catch (error) {}
+        }
+
+        if (flightPresent) {
+          console.log("flight already exisits . . . skipping")
+        } else {
+          mergedDays[dayName].push(rawFlight)
+        }
       }
     }
-    resolve(parsedFlights)
+    //sort each day's flights by $ - $$$
+    for (day in mergedDays) {
+      mergedDays[day].sort((flight1, flight2) => {
+        return flight1.lowestPrice - flight2.lowestPrice
+      })
+    }
+    resolve(mergedDays)
   })
 }
 
 //sortCFlightsFromGroups(testJson)
 
 const findCheapestFlight = (origin, flights) => {
-  let sortedFlights = []
-  for (let flight of flights) {
-    if (flight.departureCity === origin) {
-      sortedFlights.push(flight)
+  return new Promise((resolve, reject) => {
+    let sortedFlights = []
+    for (let flight of flights) {
+      if (flight.departureCity === origin) {
+        sortedFlights.push(flight)
+      }
     }
-  }
-  sortedFlights.sort((flight1, flight2) => {
-    return flight1.lowestPrice - flight2.lowestPrice
-  })
+    sortedFlights.sort((flight1, flight2) => {
+      return flight1.lowestPrice - flight2.lowestPrice
+    })
 
-  return sortedFlights
+    resolve(sortedFlights)
+  });
 }
 
-let cheapDeparture = findCheapestFlight('SHA', parsedFlights)
+//let cheapDeparture = findCheapestFlight('SHA', parsedFlights)
+
+const gtesting = buildSlices(buildRWindow(startDate(),1))
+const ctesting = buildRWindow(startDate(),1,'ctrip')
+
+let test;
+
+findcFlights(ctesting,'kmg','dig').then( results => sortCFlightsFromGroups(results)).then( results => test = results)
+/* DB Structure:
+use route as "primary key" for an index with essential info. 
+ROUTE (based on city code):
+SHA - HKG: {
+  week1: {
+    departures: {
+      flight1: {
+        priceRMB: 123,
+        number: MU245,
+        minLength: 124
+        detailedID: h3hk5bzkl35
+      },
+      flight2: {},
+      flight3: {},
+    }
+    returns: {
+      flight1: {},
+      flight2: {},
+      flight3: {},
+    }
+  }
+}
+
+*/
 
   // using QPX, which doesnt actually do what I want. Not sure I can, given the restraints of their API.
   function findgFlights(slices) {
@@ -219,7 +277,3 @@ let cheapDeparture = findCheapestFlight('SHA', parsedFlights)
     });  
   //return qpx.search(data).then(results => console.log(results))
 }
-
-const gtesting = buildSlices(buildRWindow(startDate(),1))
-const ctesting = buildRWindow(startDate(),1,'ctrip')
-
