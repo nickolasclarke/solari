@@ -7,7 +7,7 @@ const PQueue = require('p-queue')
 const fs = require('fs')
 
 
-const admin = require('firebase-admin');
+/* const admin = require('firebase-admin');
 
 // Fetch the service account key JSON file contents
 const serviceAccount = require("./solari-71282-firebase-adminsdk-s3iks-9bc55632a4.json");
@@ -18,7 +18,7 @@ admin.initializeApp({
   databaseURL: "https://solari-71282.firebaseio.com"
 });
 const db = admin.database();
-
+ */
 /*const qpx = new QPXApi({
   api_key: '',
   timeout: 5000 // timeout in milleseconds
@@ -157,12 +157,21 @@ function dates(searchDate, engine) {
           newFlight.pToken = i
 
           q.add(() => cfClient.oneWay(newFlight).then( results => {
-            flightResults[newFlight.DCity + newFlight.ACity + newFlight.DDate + 'p' + newFlight.pToken] = results
+            let currentResult = flightResults[newFlight.DCity + newFlight.ACity + newFlight.DDate + 'p' + newFlight.pToken] = {
+              'meta':{
+                'departureDate':newFlight.DDate,
+                'departureCity': newFlight.DCity,
+                'arrivalCity': newFlight.ACity
+              },
+              'flights':[]
+            }
+
+            currentResult.flights = results
             if (Object.keys(flightResults).length === (flightList.length * 3)){
               console.log('done', newFlight)
               return resolve(q.onEmpty().then( () => flightResults))
             } else {
-              return console.log(' hi done', newFlight)
+              return console.log('hi done', newFlight)
             }
           })
           )
@@ -180,10 +189,13 @@ const sortCFlightsFromGroups = (groups) => {
     let mergedDays = {}
     for (let group in groups) {
       // we are only interested in the Flights Array
-      let rawFlights = groups[group].FlightIntlAjaxResults
+      let rawFlights = groups[group]['flights'].FlightIntlAjaxResults
       let dayName = group.substr(0, 16)
       if (!mergedDays[dayName]) {
-        mergedDays[dayName] = []
+        mergedDays[dayName] = {
+          'meta': groups[group]['meta'],
+          'flights': []
+        }
       }
       //loop through each flight and extract relevant info.
       for (let flight in rawFlights) {
@@ -195,9 +207,9 @@ const sortCFlightsFromGroups = (groups) => {
         rawFlight.lowestPrice = rawFlights[flight].flightIntlPolicys[0].ViewTotalPrice
         //check if the flight has already been processed from a previous group
 
-        for (let dayFlight in mergedDays[dayName]) {
+        for (let dayFlight in mergedDays[dayName]['flights']) {
           try {
-            assert.deepEqual(mergedDays[dayName][dayFlight], rawFlight)
+            assert.deepEqual(mergedDays[dayName]['flights'][dayFlight], rawFlight)
             flightPresent = true
             break
           } catch (error) {}
@@ -206,13 +218,13 @@ const sortCFlightsFromGroups = (groups) => {
         if (flightPresent) {
           console.log("flight already exisits . . . skipping")
         } else {
-          mergedDays[dayName].push(rawFlight)
+          mergedDays[dayName]['flights'].push(rawFlight)
         }
       }
     }
     //sort each day's flights by $ - $$$
     for (day in mergedDays) {
-      mergedDays[day].sort((flight1, flight2) => {
+      mergedDays[day]['flights'].sort((flight1, flight2) => {
         return flight1.lowestPrice - flight2.lowestPrice
       })
     }
@@ -220,6 +232,7 @@ const sortCFlightsFromGroups = (groups) => {
   })
 }
 
+//weeks = int, engine = 'ctrip' || 'qpx', routeHome = string, routeDest = string
 async function main(weeks, engine, routeHome, routeDest, ) {
   const windowDates = buildRWindow(startDate(), weeks, engine)
   try {
@@ -230,8 +243,6 @@ async function main(weeks, engine, routeHome, routeDest, ) {
     console.error(error)
   }
 }
-
-
 
 module.exports = main
 
@@ -262,7 +273,7 @@ SHA - HKG: {
 
 
 
-const findCheapestFlight = (origin, flights) => {
+/* const findCheapestFlight = (origin, flights) => {
   return new Promise((resolve, reject) => {
     let sortedFlights = []
     for (let flight of flights) {
@@ -276,10 +287,10 @@ const findCheapestFlight = (origin, flights) => {
 
     resolve(sortedFlights)
   });
-}
+} */
 
   // using QPX, which doesnt actually do what I want. Not sure I can, given the restraints of their API.
-  function findgFlights(slices) {
+/*   function findgFlights(slices) {
     let data = {
       passengers: { adultCount: 1 },
       slice: [],
@@ -294,4 +305,4 @@ const findCheapestFlight = (origin, flights) => {
       resolve(data)
     });
   //return qpx.search(data).then(results => console.log(results))
-}
+} */
